@@ -6,7 +6,24 @@
       "Bash(npx create-next-app@latest geo-analyzer --typescript --tailwind --eslint --app --src-dir=false --import-alias=\"@/*\" --yes)",
       "Bash(cp -r /c/Users/akinc/geo-analyzer/. /c/Users/akinc/GeoAnalyzer/ && ls /c/Users/akinc/GeoAnalyzer/)",
       "Bash(npm install:*)",
-      "Bash(npx shadcn@latest init -d 2>&1 | tail -10)"
+      "Bash(npx shadcn@latest init -d 2>&1 | tail -10)",
+      "Bash(npx shadcn@latest add badge card input progress separator tabs toast 2>&1 | tail -10)",
+      "Bash(npx shadcn@latest add badge card input progress separator tabs sonner alert 2>&1 | tail -10)",
+      "Bash(npx tsc:*)",
+      "Bash(node -e \"const {z} = require\\('zod'\\); const r = z.object\\({url: z.string\\(\\)}\\).safeParse\\({}\\); if\\(!r.success\\) { console.log\\(Object.keys\\(r.error\\)\\); }\")",
+      "Bash(DATABASE_URL=\"postgresql://placeholder:placeholder@localhost:5432/placeholder\" npx prisma generate 2>&1 | tail -10)",
+      "Bash(echo 'DATABASE_URL=\"postgresql://placeholder:placeholder@localhost:5432/placeholder\"' > .env && npx prisma generate 2>&1 | tail -10)",
+      "Bash(npx prisma:*)",
+      "Bash(npm run:*)",
+      "Bash(git remote:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(node:*)",
+      "Bash(find node_modules/next/dist/docs -name proxy*)",
+      "Bash(git rm:*)",
+      "Bash(npx prisma@5 db push)"
     ]
   }
 }

@@ -12,11 +12,19 @@ import { extractEeat } from "@/lib/scraper/extract-eeat";
 import { analyzeContent } from "@/lib/ai/analyze-content";
 import { buildReport } from "@/lib/scoring/calculate-scores";
 import type { PageData } from "@/lib/types/report";
+import type { Prisma } from "@prisma/client";
+
+// Safe cast for serializable objects to Prisma JSON fields
+function toJson<T>(value: T): Prisma.InputJsonValue {
+  return value as unknown as Prisma.InputJsonValue;
+}
 
 // Prevent long cold starts from timing out Vercel
 export const maxDuration = 60;
 
-export async function POST(req: NextRequest) {
+const INSUFFICIENT_CREDITS = "INSUFFICIENT_CREDITS";
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -33,19 +41,6 @@ export async function POST(req: NextRequest) {
     }
 
     const { url } = parsed.data;
-
-    // Check credits
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { credits: true },
-    });
-
-    if (!user || user.credits <= 0) {
-      return NextResponse.json(
-        { error: "No credits remaining. More credits coming soon!" },
-        { status: 402 }
-      );
-    }
 
     // Fetch and parse the page
     const { $, html, isHttps, finalUrl } = await fetchPage(url);
@@ -92,35 +87,63 @@ export async function POST(req: NextRequest) {
     // Build full report
     const report = buildReport(pageData, aiResult);
 
-    // Deduct credit & save report in a transaction
-    const [savedReport] = await prisma.$transaction([
-      prisma.geoReport.create({
+    // Atomically check credits > 0, decrement, and save report in one transaction
+    const savedReport = await prisma.$transaction(async (tx) => {
+      const updated = await tx.user.updateMany({
+        where: { id: session.user.id, credits: { gt: 0 } },
+        data: { credits: { decrement: 1 } },
+      });
+
+      if (updated.count === 0) {
+        throw new Error(INSUFFICIENT_CREDITS);
+      }
+
+      return tx.geoReport.create({
         data: {
           userId: session.user.id,
           url: report.url,
           domain: report.domain,
           overallScore: report.overallScore,
           grade: report.grade,
-          contentStructure: report.contentStructure as object,
-          eeatSignals: report.eeatSignals as object,
-          technicalReadiness: report.technicalReadiness as object,
-          contentQuality: report.contentQuality as object,
-          aiSearchOptimization: report.aiSearchOptimization as object,
-          issues: report.issues as object,
-          recommendations: report.recommendations as object,
+          contentStructure: toJson(report.contentStructure),
+          eeatSignals: toJson(report.eeatSignals),
+          technicalReadiness: toJson(report.technicalReadiness),
+          contentQuality: toJson(report.contentQuality),
+          aiSearchOptimization: toJson(report.aiSearchOptimization),
+          issues: toJson(report.issues),
+          recommendations: toJson(report.recommendations),
         },
-      }),
-      prisma.user.update({
-        where: { id: session.user.id },
-        data: { credits: { decrement: 1 } },
-      }),
-    ]);
+      });
+    });
 
     return NextResponse.json({ reportId: savedReport.id });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Analysis failed";
     console.error("[analyze]", error);
-    return NextResponse.json({ error: message }, { status: 500 });
+
+    if (error instanceof Error && error.message === INSUFFICIENT_CREDITS) {
+      return NextResponse.json(
+        { error: "No credits remaining. More credits coming soon!" },
+        { status: 402 }
+      );
+    }
+
+    if (error instanceof Error && error.message.startsWith("HTTP ")) {
+      return NextResponse.json(
+        { error: `Could not fetch the page: ${error.message}` },
+        { status: 422 }
+      );
+    }
+
+    if (error instanceof Error && error.message.includes("aborted")) {
+      return NextResponse.json(
+        { error: "The page took too long to respond. Please try again." },
+        { status: 408 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: "Analysis failed. Please try again." },
+      { status: 500 }
+    );
   }
 }

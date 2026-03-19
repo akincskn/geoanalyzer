@@ -32,21 +32,26 @@ export function UrlForm({ credits }: { credits: number }) {
 
     setLoading(true);
 
-    const res = await fetch("/api/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
-    });
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
 
-    const data = (await res.json()) as { reportId?: string; error?: string };
+      const data = (await res.json()) as { reportId?: string; error?: string };
 
-    if (!res.ok || !data.reportId) {
-      setError(data.error ?? "Analysis failed. Please try again.");
+      if (!res.ok || !data.reportId) {
+        setError(data.error ?? "Analysis failed. Please try again.");
+        setLoading(false);
+        return;
+      }
+
+      router.push(`/report/${data.reportId}`);
+    } catch {
+      setError("Network error. Please check your connection and try again.");
       setLoading(false);
-      return;
     }
-
-    router.push(`/report/${data.reportId}`);
   };
 
   if (loading) {
